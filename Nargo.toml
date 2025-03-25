@@ -5,4 +5,4 @@ authors = [""]
 compiler_version = ">=0.34.0"
 
 [dependencies]
-mpclib = {tag="0.1", git="https://github.com/zac-williamson/fog_of_war_chess"}
+mpclib = {tag = "0.1", git = "https://github.com/zac-williamson/mpclib"}
