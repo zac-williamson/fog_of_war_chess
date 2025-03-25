@@ -34,13 +34,31 @@ impl GameState {
         let buffer: [Field; 3] = [self.game_ended as Field, self.move_count, self.mpc_state.hash()];
         poseidon2(buffer, 3)
     }
+    pub fn commit_to_user_secrets(
+        self,
+        encrypt_secret: Field,
+        mask_secret: Field,
+        player_id: Field,
+    ) -> GameState {
+        let mut updated = self;
+
+        let secret_hashes = [poseidon2([encrypt_secret, -1], 2), poseidon2([mask_secret, -1], 2)];
+        updated.mpc_state.user_encrypt_secret_hashes[player_id] = secret_hashes[0];
+        updated.mpc_state.user_mask_secret_hashes[player_id] = secret_hashes[1];
+        updated
+    }
 }
 
 pub struct MoveData {
-    x1: Field,
-    y1: Field,
-    x2: Field,
-    y2: Field,
+    pub x1: Field,
+    pub y1: Field,
+    pub x2: Field,
+    pub y2: Field,
+}
+impl MoveData {
+    fn new(x1: Field, y1: Field, x2: Field, y2: Field) -> Self {
+        MoveData { x1, y1, x2, y2 }
+    }
 }
 
 pub struct UserState {
@@ -169,7 +187,7 @@ impl std::default::Default for AdditionalMoveData {
     }
 }
 
-fn consume_opponent_move_and_update_game_state(
+pub fn consume_opponent_move_and_update_game_state(
     input_state: GameState,
     user_state: UserState,
     player_id: Field,
@@ -287,9 +305,14 @@ pub fn move(
     // White has received Black's mask commitments (what black wants to see from white)
 }
 
+pub fn empty_game_state() -> GameState {
+    GameState::default()
+}
+
 #[test]
 fn test_move() {
-    let mut game_state: GameState = GameState::default();
+    let mut game_state: GameState = empty_game_state();
+
     let mut alice_state: UserState = UserState::default();
     let mut bob_state: UserState = UserState::default();
 
@@ -298,22 +321,16 @@ fn test_move() {
     bob_state.encrypt_secret = poseidon2([3], 1);
     bob_state.mask_secret = poseidon2([4], 1);
 
-    // TODO find a nicer way of doing this
-    let user_encrypt_secret_hashes = [
-        poseidon2([alice_state.encrypt_secret, -1], 2),
-        poseidon2([bob_state.encrypt_secret, -1], 2),
-    ];
-    let user_mask_secret_hashes =
-        [poseidon2([alice_state.mask_secret, -1], 2), poseidon2([bob_state.mask_secret, -1], 2)];
-    game_state.mpc_state.user_encrypt_secret_hashes = user_encrypt_secret_hashes;
-    game_state.mpc_state.user_mask_secret_hashes = user_mask_secret_hashes;
+    game_state =
+        game_state.commit_to_user_secrets(alice_state.encrypt_secret, alice_state.mask_secret, 0);
+    game_state =
+        game_state.commit_to_user_secrets(bob_state.encrypt_secret, bob_state.mask_secret, 1);
 
     // alice moves pawn
 
     let alice_move: MoveData = MoveData { x1: 4, y1: 1, x2: 4, y2: 3 };
     let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
     game_state = m.0;
-
     let alice_state2 = m.1;
 
     // bob updates her state after receiving alice's move output
