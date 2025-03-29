@@ -12,6 +12,7 @@ mod update_vision;
 mod vision_table;
 mod piece;
 mod validate_move;
+mod api;
 
 use update_vision::update_vision;
 
@@ -62,10 +63,10 @@ impl MoveData {
 }
 
 pub struct UserState {
-    encrypt_secret: Field,
-    mask_secret: Field,
-    visible_squares: [Field; 64],
-    game_state: [Piece; 64],
+    pub encrypt_secret: Field,
+    pub mask_secret: Field,
+    pub visible_squares: [Field; 64],
+    pub game_state: [Piece; 64],
 }
 
 impl std::default::Default for UserState {
@@ -81,7 +82,7 @@ impl std::default::Default for UserState {
 
 impl UserState {
 
-    fn initialize(self, player_id: Field) -> Self {
+    pub(crate) fn initialize(self, player_id: Field) -> Self {
         let first_32_square_visibility = 1 - player_id;
         let last_32_square_visibility = player_id;
         assert_eq(WHITE_PLAYER_ID, 0);
@@ -202,12 +203,37 @@ pub fn consume_opponent_move_and_update_game_state(
     // We don't need to check the move is legal, as black will have validated this when making a move proof
     // TODO: EN PASSANT DOES NOT WORK BECAUSE WE NEED TO DELETE A SQUARE AND REPLACE WITH NOTHING
     for i in 0..64 {
-        if (opponent_output_state[0][i].is_some()) {
-            let decoded = Piece::decode(opponent_output_state[0][i].unwrap_unchecked());
-            if (decoded.id != Pieces::EMPTY_SQUARE) {
-                new_state.game_state[i] = decoded;
-            }
-        }
+        let is_some = opponent_output_state[0][i].is_some() as Field;
+        // if (opponent_output_state[0][i].is_some()) {
+        let decoded_packed = opponent_output_state[0][i].unwrap_unchecked();
+        let decoded: Piece = Piece::decode(decoded_packed);
+
+        let decoded_is_empty = (decoded.id == Pieces::EMPTY_SQUARE) as Field;
+        let original_square_is_not_empty =
+            (user_state.game_state[i].id != Pieces::EMPTY_SQUARE) as Field;
+        let original_square_not_player = (user_state.game_state[i].player_id != player_id) as Field;
+
+        let update_square = (1 - decoded_is_empty) * is_some;
+        let delete_square =
+            decoded_is_empty * original_square_is_not_empty * original_square_not_player * is_some;
+        std::as_witness(update_square);
+        std::as_witness(delete_square);
+        let leave_square_alone = (1 - update_square) * (1 - delete_square);
+        std::as_witness(leave_square_alone);
+
+        let original_packed = user_state.game_state[i].encode();
+
+        let updated_square = original_packed * leave_square_alone + decoded_packed * update_square;
+        new_state.game_state[i] = Piece::decode(updated_square);
+        // if (decoded.id != Pieces::EMPTY_SQUARE) {
+        //     new_state.game_state[i] = decoded;
+        // } else if (
+        //     (user_state.game_state[i].id != Pieces::EMPTY_SQUARE)
+        //         & (user_state.game_state[i].player_id != player_id)
+        // ) {
+        //     new_state.game_state[i] = Piece { id: 0, player_id: 0, has_moved: 0 };
+        // }
+        //}
     }
 
     new_state
@@ -223,7 +249,7 @@ pub fn move(
     user_state: UserState,
     move_data: MoveData,
     player_id: Field,
-) -> (GameState, UserState, Field, Field) {
+) -> (GameState, Field, Field) {
     assert((player_id == WHITE_PLAYER_ID) | (player_id == BLACK_PLAYER_ID));
     assert_eq(input_state.game_ended, false);
     // Safety: cheapish check to see if player_id is correct. If move_count = even, white's turn. odd = black's turn
@@ -298,7 +324,7 @@ pub fn move(
         mpc_state: output_mpc_state,
     };
 
-    (output_state, user_state, output_state.hash(), user_state.hash())
+    (output_state, output_state.hash(), user_state.hash())
     // need to validate move.
     // if Castle, or En Passant, 2 states need to be updated
 
@@ -331,39 +357,46 @@ fn test_move() {
     let alice_move: MoveData = MoveData { x1: 4, y1: 1, x2: 4, y2: 3 };
     let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
     game_state = m.0;
-    let alice_state2 = m.1;
+    let mut alice_state =
+        api::update_user_state_from_move(true, alice_state, alice_move, WHITE_PLAYER_ID);
 
     // bob updates her state after receiving alice's move output
-    // let mut bob_state =
-    //     consume_opponent_move_and_update_game_state(game_state, bob_state, BLACK_PLAYER_ID);
+    let mut bob_new_state =
+        consume_opponent_move_and_update_game_state(game_state, bob_state, BLACK_PLAYER_ID);
 
     let bob_move: MoveData = MoveData { x1: 4, y1: 6, x2: 4, y2: 4 };
     let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID);
     game_state = m.0;
-    bob_state = m.1;
+    bob_state = api::update_user_state_from_move(true, bob_new_state, bob_move, BLACK_PLAYER_ID);
     // // alice updates her state after receiving bob's move output
-    // let alice_state =
-    //     consume_opponent_move_and_update_game_state(game_state, alice_state, WHITE_PLAYER_ID);
+    let alice_new_state =
+        consume_opponent_move_and_update_game_state(game_state, alice_state, WHITE_PLAYER_ID);
 
     // alice moves queen to H5
     let alice_move = MoveData { x1: 3, y1: 0, x2: 7, y2: 4 };
-    let m = move(game_state, alice_state2, alice_move, WHITE_PLAYER_ID);
+    let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
     game_state = m.0;
-    alice_state = m.1;
+    alice_state =
+        api::update_user_state_from_move(false, alice_new_state, alice_move, WHITE_PLAYER_ID);
     // // bob updates her state after receiving alice's move output
-    // let bob_state =
-    //     consume_opponent_move_and_update_game_state(game_state, bob_state, BLACK_PLAYER_ID);
+    let bob_new_state =
+        consume_opponent_move_and_update_game_state(game_state, bob_state, BLACK_PLAYER_ID);
 
     // bob moves pawn to F5
     let bob_move = MoveData { x1: 5, y1: 6, x2: 5, y2: 5 };
     let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID);
     game_state = m.0;
-    bob_state = m.1;
+    bob_state = api::update_user_state_from_move(false, bob_new_state, bob_move, BLACK_PLAYER_ID);
     // alice moves queen to E8, checkmate
+
+    let alice_new_state =
+        consume_opponent_move_and_update_game_state(game_state, alice_state, WHITE_PLAYER_ID);
+
     let alice_move = MoveData { x1: 7, y1: 4, x2: 4, y2: 7 };
     let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
     game_state = m.0;
-    alice_state = m.1;
+    alice_state =
+        api::update_user_state_from_move(false, alice_new_state, alice_move, WHITE_PLAYER_ID);
     assert_eq(game_state.game_ended, true);
     // // alice updates her state after receiving bob's move output
     // let alice_state =

@@ -1,0 +1,2 @@
+#see https://noir-lang.org/docs/reference/noir_codegen
+yarn noir-codegen ./export/commit_to_user_secrets.json ./export/consume_opponent_move_and_update_game_state.json ./export/create_move.json ./export/empty_black_state.json ./export/empty_white_state.json ./export/empty_game_state.json ./export/update_user_state_from_move.json

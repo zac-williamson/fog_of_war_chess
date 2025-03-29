@@ -1,0 +1,11 @@
+{
+  "name": "fog_of_war_chess",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:zac-williamson/fog_of_war_chess.git",
+  "author": "zac-williamson <blorktronics@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@noir-lang/noir_codegen": "^1.0.0-beta.3"
+  }
+}

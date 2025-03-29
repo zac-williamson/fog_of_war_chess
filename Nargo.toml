@@ -2,7 +2,7 @@
 name = "fog_of_war_chess"
 type = "lib"
 authors = [""]
-compiler_version = ">=0.34.0"
+compiler_version = ">=1.0.0"
 
 [dependencies]
-mpclib = {tag = "0.1", git = "https://github.com/zac-williamson/mpclib"}
+mpclib = {tag="main", git = "https://github.com/zac-williamson/mpclib"}

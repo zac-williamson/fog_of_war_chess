@@ -9,10 +9,10 @@ pub(crate) mod Pieces {
     pub(crate) global KING: Field = 7;
 }
 
-pub(crate) struct Piece {
-    pub(crate) id: Field,
-    pub(crate) player_id: Field,
-    pub(crate) has_moved: Field,
+pub struct Piece {
+    pub id: Field,
+    pub player_id: Field,
+    pub has_moved: Field,
 }
 impl std::default::Default for Piece {
     fn default() -> Self {

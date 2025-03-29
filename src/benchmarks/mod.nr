@@ -23,7 +23,7 @@ fn bench_move(
     alice_state: UserState,
     alice_move: MoveData,
     player_id: Field,
-) -> (GameState, UserState, Field, Field) {
+) -> (GameState, Field, Field) {
     move(game_state, alice_state, alice_move, player_id)
 }
 
