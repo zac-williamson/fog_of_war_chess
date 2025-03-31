@@ -226,11 +226,9 @@ pub fn consume_opponent_move_and_update_game_state(
         let updated_square = original_packed * leave_square_alone + decoded_packed * update_square;
 
         // if leave_square_alone, piece is opponent piece and square is not visible, make square invisible
-        let square_not_visible = (user_state.visible_squares[i] == 0) as Field;
-        let lost_vision_on_square = square_not_visible
-            * (1 - is_some)
-            * original_square_is_not_empty
-            * original_square_not_player;
+        let square_not_visible = (1 - is_some);
+        let lost_vision_on_square =
+            square_not_visible * original_square_is_not_empty * original_square_not_player;
         let updated_square = updated_square * (1 - lost_vision_on_square);
         new_state.game_state[i] = Piece::decode(updated_square);
     }
