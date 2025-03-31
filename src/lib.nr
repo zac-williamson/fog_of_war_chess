@@ -244,12 +244,31 @@ unconstrained fn __div2(input: Field) -> u32 {
     r / 2
 }
 
+pub struct MoveHashes {
+    pub input_game_state: Field,
+    pub input_user_state: Field,
+    pub output_game_state: Field,
+    pub output_user_state: Field,
+}
+impl std::default::Default for MoveHashes {
+    fn default() -> Self {
+        MoveHashes {
+            input_game_state: 0,
+            input_user_state: 0,
+            output_game_state: 0,
+            output_user_state: 0,
+        }
+    }
+}
+
 pub fn move(
     input_state: GameState,
     user_state: UserState,
     move_data: MoveData,
     player_id: Field,
-) -> (GameState, Field, Field) {
+) -> (GameState, MoveHashes) {
+    let input_state_hash = input_state.hash();
+    let input_user_state_hash = user_state.hash();
     assert((player_id == WHITE_PLAYER_ID) | (player_id == BLACK_PLAYER_ID));
     assert_eq(input_state.game_ended, false);
     // Safety: cheapish check to see if player_id is correct. If move_count = even, white's turn. odd = black's turn
@@ -324,7 +343,15 @@ pub fn move(
         mpc_state: output_mpc_state,
     };
 
-    (output_state, output_state.hash(), user_state.hash())
+    (
+        output_state,
+        MoveHashes {
+            input_game_state: input_state_hash,
+            input_user_state: input_user_state_hash,
+            output_game_state: output_state.hash(),
+            output_user_state: user_state.hash(),
+        },
+    )
     // need to validate move.
     // if Castle, or En Passant, 2 states need to be updated
 
@@ -354,9 +381,11 @@ fn test_move() {
 
     // alice moves pawn
 
+    let mut hashes: [MoveHashes; 10] = [MoveHashes::default(); 10];
     let alice_move: MoveData = MoveData { x1: 4, y1: 1, x2: 4, y2: 3 };
     let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
     game_state = m.0;
+    hashes[0] = m.1;
     let mut alice_state =
         api::update_user_state_from_move(true, alice_state, alice_move, WHITE_PLAYER_ID);
 
@@ -367,6 +396,7 @@ fn test_move() {
     let bob_move: MoveData = MoveData { x1: 4, y1: 6, x2: 4, y2: 4 };
     let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID);
     game_state = m.0;
+    hashes[1] = m.1;
     bob_state = api::update_user_state_from_move(true, bob_new_state, bob_move, BLACK_PLAYER_ID);
     // // alice updates her state after receiving bob's move output
     let alice_new_state =
@@ -376,6 +406,7 @@ fn test_move() {
     let alice_move = MoveData { x1: 3, y1: 0, x2: 7, y2: 4 };
     let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
     game_state = m.0;
+    hashes[2] = m.1;
     alice_state =
         api::update_user_state_from_move(false, alice_new_state, alice_move, WHITE_PLAYER_ID);
     // // bob updates her state after receiving alice's move output
@@ -386,6 +417,7 @@ fn test_move() {
     let bob_move = MoveData { x1: 5, y1: 6, x2: 5, y2: 5 };
     let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID);
     game_state = m.0;
+    hashes[3] = m.1;
     bob_state = api::update_user_state_from_move(false, bob_new_state, bob_move, BLACK_PLAYER_ID);
     // alice moves queen to E8, checkmate
 
@@ -395,6 +427,7 @@ fn test_move() {
     let alice_move = MoveData { x1: 7, y1: 4, x2: 4, y2: 7 };
     let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
     game_state = m.0;
+    hashes[4] = m.1;
     alice_state =
         api::update_user_state_from_move(false, alice_new_state, alice_move, WHITE_PLAYER_ID);
     assert_eq(game_state.game_ended, true);
@@ -402,4 +435,13 @@ fn test_move() {
     // let alice_state =
     //     consume_opponent_move_and_update_game_state(game_state, alice_state, WHITE_PLAYER_ID);
 
+    println(f"hashes = {hashes}");
+    assert_eq(hashes[0].output_game_state, hashes[1].input_game_state);
+    assert_eq(hashes[1].output_game_state, hashes[2].input_game_state);
+    assert_eq(hashes[2].output_game_state, hashes[3].input_game_state);
+    assert_eq(hashes[3].output_game_state, hashes[4].input_game_state);
+
+    assert_eq(hashes[0].output_user_state, hashes[2].input_user_state);
+    assert_eq(hashes[1].output_user_state, hashes[3].input_user_state);
+    assert_eq(hashes[2].output_user_state, hashes[4].input_user_state);
 }

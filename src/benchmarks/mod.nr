@@ -1,4 +1,4 @@
-use crate::{GameState, move, MoveData, UserState};
+use crate::{GameState, move, MoveData, MoveHashes, UserState};
 use crate::piece::{Piece, PieceData, Pieces};
 use crate::update_vision::{get_piece_data, update_vision, update_vision_for_piece};
 use crate::validate_move::validate_move_and_update_board_state;
@@ -23,7 +23,7 @@ fn bench_move(
     alice_state: UserState,
     alice_move: MoveData,
     player_id: Field,
-) -> (GameState, Field, Field) {
+) -> (GameState, MoveHashes) {
     move(game_state, alice_state, alice_move, player_id)
 }
 
