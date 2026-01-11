@@ -26,9 +26,10 @@ pub(crate) fn get_piece_data(pieces: [Piece; 64], player_id: Field) -> [PieceDat
         let piece_to_insert =
             PieceData { exists: 1, id: pieces[i].id, x: piece_x, y: piece_y }.pack();
 
-        let input_piece = packed_piece_data[idx];
+        idx.assert_max_bit_size::<32>();
+        let input_piece = packed_piece_data[idx as u32];
         let output = input_piece * (1 - insert_piece) + insert_piece * piece_to_insert;
-        packed_piece_data[idx] = output;
+        packed_piece_data[idx as u32] = output;
         idx += insert_piece;
     }
 
@@ -59,14 +60,19 @@ pub(crate) fn update_vision_for_piece(
     let y = piece_data.y;
     let piece_id = piece_data.id - 1;
     let vision_idx = piece_id * 64 + (x as Field) + (y as Field * 8);
-    let vision_idx = vision_idx * piece_data.exists as Field;
-    let vision_vector_f = VISION_TABLE[vision_idx];
+    let vision_idx: Field = vision_idx * piece_data.exists as Field;
+    vision_idx.assert_max_bit_size::<32>();
+
+    let vision_vector_f = VISION_TABLE[vision_idx as u32];
     let vision_vector: [u1; 64] = vision_vector_f.to_le_bits();
 
     {
-        let input_vision = output_vision[x + (y * 8)];
+        let output_idx = x + (y * 8);
+        output_idx.assert_max_bit_size::<32>();
+
+        let input_vision = output_vision[output_idx as u32];
         let updated_vision = (1 - piece_data.exists) * input_vision + piece_data.exists;
-        output_vision[x + (y * 8)] = updated_vision;
+        output_vision[output_idx as u32] = updated_vision;
     }
 
     let piece_exists = piece_data.exists as Field;
@@ -90,16 +96,16 @@ pub(crate) fn update_vision_for_piece(
             std::as_witness(location);
             let location_valid = vision_vector[i + (7 * j)] as Field;
             let bounded_location = location * location_valid;
-
-            let square_empty = (pieces[bounded_location].id == Pieces::EMPTY_SQUARE) as Field;
+            bounded_location.assert_max_bit_size::<32>();
+            let square_empty = (pieces[bounded_location as u32].id == Pieces::EMPTY_SQUARE) as Field;
             let mut blocked: Field = vision_blocked[j];
             let execute = (piece_exists * location_valid);
             std::as_witness(execute);
             let execute = execute - execute * blocked;
             std::as_witness(execute);
-            let mut visible = output_vision[bounded_location];
+            let mut visible = output_vision[bounded_location as u32];
             let updated_visible = (execute + visible - visible * execute);
-            output_vision[bounded_location] = updated_visible;
+            output_vision[bounded_location as u32] = updated_visible;
             let is_blocked = execute * (1 - square_empty as Field);
             std::as_witness(is_blocked);
             let updated_blocked = blocked * (1 - is_blocked) + is_blocked;
@@ -134,10 +140,11 @@ pub(crate) fn update_vision_for_piece(
         let is_knight = (piece_data.id == Pieces::KNIGHT) as Field;
         let execute = location_valid * piece_exists * is_knight;
 
-        let vision = output_vision[knight_locations[i]];
+        knight_locations[i].assert_max_bit_size::<32>();
+        let vision = output_vision[knight_locations[i] as u32];
 
         let updated_vision = vision * (1 - execute) + execute;
-        output_vision[knight_locations[i]] = updated_vision;
+        output_vision[knight_locations[i] as u32] = updated_vision;
     }
 }
 

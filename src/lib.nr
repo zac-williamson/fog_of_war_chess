@@ -16,7 +16,9 @@ mod api;
 
 use update_vision::update_vision;
 
-use std::hash::poseidon2::Poseidon2::hash as poseidon2;
+
+use poseidon::poseidon2::Poseidon2::hash as poseidon2;
+
 
 type RoundMpcState = RoundState<64, 2>;
 pub struct GameState {
@@ -33,13 +35,14 @@ impl std::default::Default for GameState {
 impl GameState {
     pub fn hash(self) -> Field {
         let buffer: [Field; 3] = [self.game_ended as Field, self.move_count, self.mpc_state.hash()];
+        
         poseidon2(buffer, 3)
     }
     pub fn commit_to_user_secrets(
         self,
         encrypt_secret: Field,
         mask_secret: Field,
-        player_id: Field,
+        player_id: u32,
     ) -> GameState {
         let mut updated = self;
 
@@ -171,6 +174,9 @@ impl UserState {
 global BLACK_PLAYER_ID: Field = 1;
 global WHITE_PLAYER_ID: Field = 0;
 
+global BLACK_PLAYER_ID_U32: u32 = 1;
+global WHITE_PLAYER_ID_U32: u32 = 0;
+
 struct AdditionalMoveData {
     extra_state_update: PieceData,
     extra_state_update_needed: bool,
@@ -262,18 +268,18 @@ pub fn move(
     input_state: GameState,
     user_state: UserState,
     move_data: MoveData,
-    player_id: Field,
+    player_id: u32,
 ) -> (GameState, MoveHashes) {
     let input_state_hash = input_state.hash();
     let input_user_state_hash = user_state.hash();
-    assert((player_id == WHITE_PLAYER_ID) | (player_id == BLACK_PLAYER_ID));
+    assert((player_id as Field == WHITE_PLAYER_ID) | (player_id as Field == BLACK_PLAYER_ID));
     assert_eq(input_state.game_ended, false);
     // Safety: cheapish check to see if player_id is correct. If move_count = even, white's turn. odd = black's turn
     let move_count_div2 = unsafe { __div2(input_state.move_count) };
-    assert_eq(move_count_div2 as Field * 2 + player_id, input_state.move_count);
+    assert_eq(move_count_div2 as Field * 2 + player_id as Field, input_state.move_count);
     let mut user_state = user_state;
     if ((input_state.move_count == 0) | (input_state.move_count == 1)) {
-        user_state = UserState::initialize(user_state, player_id);
+        user_state = UserState::initialize(user_state, player_id as Field);
     }
 
     // TODO: we need to validate that the provided user state is the same as a user state value that white previously committed to
@@ -284,20 +290,20 @@ pub fn move(
     move_data.y2.assert_max_bit_size::<3>();
 
     let mut user_state: UserState =
-        consume_opponent_move_and_update_game_state(input_state, user_state, player_id);
+        consume_opponent_move_and_update_game_state(input_state, user_state, player_id as Field);
 
     // Validate Move
     // Update Game State
-    let starting_piece = user_state.game_state[move_data.x1 + move_data.y1 * 8];
+    let starting_piece = user_state.game_state[(move_data.x1 + move_data.y1 * 8) as u32];
     // let ending_piece = user_state.game_state[move_data.x2 + move_data.y2 * 8];
     let starting_piece_data: PieceData =
         PieceData { id: starting_piece.id, x: move_data.x1, y: move_data.y1, exists: 1 };
     let ending_piece_data: PieceData =
         PieceData { id: starting_piece.id, x: move_data.x2, y: move_data.y2, exists: 1 };
 
-    let existing_end_piece = user_state.game_state[move_data.x2 + move_data.y2 * 8];
+    let existing_end_piece = user_state.game_state[(move_data.x2 + move_data.y2 * 8) as u32];
     let mut game_ended = false;
-    if ((existing_end_piece.id == Pieces::KING) & (existing_end_piece.player_id != player_id)) {
+    if ((existing_end_piece.id == Pieces::KING) & (existing_end_piece.player_id != player_id as Field)) {
         game_ended = true;
     }
 
@@ -305,10 +311,10 @@ pub fn move(
         user_state.game_state,
         starting_piece_data,
         ending_piece_data,
-        player_id,
+        player_id as Field,
     );
     // If black has moved and captured a white piece, whice's mask vector needs to be updated
-    let visible_squares = update_vision(user_state.game_state, player_id);
+    let visible_squares = update_vision(user_state.game_state, player_id as Field);
 
     // validate_move_and_update_board_state(user_state.encoded_pieces)
     // when used inside a Noir program, previous_round_hash should be sourced from a pub variable
@@ -316,11 +322,11 @@ pub fn move(
 
     // TODO this logic should be wrapped in a helper function
     assert_eq(
-        std::hash::poseidon2::Poseidon2::hash([user_state.encrypt_secret, -1], 2),
+        poseidon2([user_state.encrypt_secret, -1], 2),
         input_state.mpc_state.user_encrypt_secret_hashes[player_id],
     );
     assert_eq(
-        std::hash::poseidon2::Poseidon2::hash([user_state.mask_secret, -1], 2),
+        poseidon2([user_state.mask_secret, -1], 2),
         input_state.mpc_state.user_mask_secret_hashes[player_id],
     );
     let white_output_state: UserOutputState<64, 2> = create_round_commitments(
@@ -380,7 +386,7 @@ fn test_move() {
 
     let mut hashes: [MoveHashes; 10] = [MoveHashes::default(); 10];
     let alice_move: MoveData = MoveData { x1: 4, y1: 1, x2: 4, y2: 3 };
-    let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
+    let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID_U32);
     game_state = m.0;
     hashes[0] = m.1;
     let mut alice_state =
@@ -391,7 +397,7 @@ fn test_move() {
         consume_opponent_move_and_update_game_state(game_state, bob_state, BLACK_PLAYER_ID);
 
     let bob_move: MoveData = MoveData { x1: 4, y1: 6, x2: 4, y2: 4 };
-    let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID);
+    let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID_U32);
     game_state = m.0;
     hashes[1] = m.1;
     bob_state = api::update_user_state_from_move(true, bob_new_state, bob_move, BLACK_PLAYER_ID);
@@ -401,7 +407,7 @@ fn test_move() {
 
     // alice moves queen to H5
     let alice_move = MoveData { x1: 3, y1: 0, x2: 7, y2: 4 };
-    let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
+    let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID_U32);
     game_state = m.0;
     hashes[2] = m.1;
     alice_state =
@@ -412,7 +418,7 @@ fn test_move() {
 
     // bob moves pawn to F5
     let bob_move = MoveData { x1: 5, y1: 6, x2: 5, y2: 5 };
-    let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID);
+    let m = move(game_state, bob_state, bob_move, BLACK_PLAYER_ID_U32);
     game_state = m.0;
     hashes[3] = m.1;
     bob_state = api::update_user_state_from_move(false, bob_new_state, bob_move, BLACK_PLAYER_ID);
@@ -422,7 +428,7 @@ fn test_move() {
         consume_opponent_move_and_update_game_state(game_state, alice_state, WHITE_PLAYER_ID);
 
     let alice_move = MoveData { x1: 7, y1: 4, x2: 4, y2: 7 };
-    let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID);
+    let m = move(game_state, alice_state, alice_move, WHITE_PLAYER_ID_U32);
     game_state = m.0;
     hashes[4] = m.1;
     alice_state =

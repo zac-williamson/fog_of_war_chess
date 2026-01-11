@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::piece::{PieceData, Pieces};
 use crate::validate_move::validate_move_and_update_board_state;
-use std::hash::poseidon2::Poseidon2::hash as poseidon2;
+use poseidon::poseidon2::Poseidon2::hash as poseidon2;
 
 /// When Alice has made a move, Bob uses this function to recover game state from Alice that he is able to see
 #[export]
@@ -33,6 +33,10 @@ pub fn empty_black_state() -> UserState {
     u.initialize(1)
 }
 
+fn to_u32(x: Field) -> u32 {
+    x.assert_max_bit_size::<32>();
+    x as u32
+}
 /// Call this fn to update a GameState object to contain a player's secret hashes
 #[export]
 pub fn commit_to_user_secrets(
@@ -44,8 +48,9 @@ pub fn commit_to_user_secrets(
     let mut updated = game_state;
 
     let secret_hashes = [poseidon2([encrypt_secret, -1], 2), poseidon2([mask_secret, -1], 2)];
-    updated.mpc_state.user_encrypt_secret_hashes[player_id] = secret_hashes[0];
-    updated.mpc_state.user_mask_secret_hashes[player_id] = secret_hashes[1];
+
+    updated.mpc_state.user_encrypt_secret_hashes[to_u32(player_id)] = secret_hashes[0];
+    updated.mpc_state.user_mask_secret_hashes[to_u32(player_id)] = secret_hashes[1];
     updated
 }
 
@@ -66,14 +71,14 @@ pub fn update_user_state_from_move(
     if (is_first_two_moves) {
         user_state = UserState::initialize(user_state, player_id);
     }
-    let starting_piece = user_state.game_state[move_data.x1 + move_data.y1 * 8];
+    let starting_piece = user_state.game_state[to_u32(move_data.x1 + move_data.y1 * 8)];
     // let ending_piece = user_state.game_state[move_data.x2 + move_data.y2 * 8];
     let starting_piece_data: PieceData =
         PieceData { id: starting_piece.id, x: move_data.x1, y: move_data.y1, exists: 1 };
     let ending_piece_data: PieceData =
         PieceData { id: starting_piece.id, x: move_data.x2, y: move_data.y2, exists: 1 };
 
-    let existing_end_piece = user_state.game_state[move_data.x2 + move_data.y2 * 8];
+    let existing_end_piece = user_state.game_state[to_u32(move_data.x2 + move_data.y2 * 8)];
     let mut game_ended = false;
     if ((existing_end_piece.id == Pieces::KING) & (existing_end_piece.player_id != player_id)) {
         game_ended = true;

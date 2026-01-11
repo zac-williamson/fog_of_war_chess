@@ -89,14 +89,14 @@ unconstrained comptime fn get_vision_table() -> [Field; 64 * 7] {
             }
 
             let mut knight_tuple: [[i32; 2]; 8] = [[0; 2]; 8];
-            knight_tuple[0] = [x + 2, y + 1];
-            knight_tuple[1] = [x + 1, y + 2];
-            knight_tuple[2] = [x - 1, y + 2];
-            knight_tuple[3] = [x - 2, y + 1];
-            knight_tuple[4] = [x + 2, y - 1];
-            knight_tuple[5] = [x + 1, y - 2];
-            knight_tuple[6] = [x - 1, y - 2];
-            knight_tuple[7] = [x - 2, y - 1];
+            knight_tuple[0] = [x as i32 + 2, y as i32 + 1];
+            knight_tuple[1] = [x as i32 + 1, y as i32 + 2];
+            knight_tuple[2] = [x as i32 - 1, y as i32 + 2];
+            knight_tuple[3] = [x as i32 - 2, y as i32 + 1];
+            knight_tuple[4] = [x as i32 + 2, y as i32 - 1];
+            knight_tuple[5] = [x as i32 + 1, y as i32 - 2];
+            knight_tuple[6] = [x as i32 - 1, y as i32 - 2];
+            knight_tuple[7] = [x as i32 - 2, y as i32 - 1];
 
             for i in 0..8 {
                 let t = knight_tuple[i];
@@ -113,13 +113,18 @@ unconstrained comptime fn get_vision_table() -> [Field; 64 * 7] {
             let black_pawn = encode_bits_into_field(black_pawn_vision_vector);
             let rook = encode_bits_into_field(rook_vision_vector);
 
-            r[(64 * (Pieces::WHITE_PAWN - 1)) + (x as Field) + (y as Field * 8)] = white_pawn;
-            r[(64 * (Pieces::BLACK_PAWN - 1)) + (x as Field) + (y as Field * 8)] = black_pawn;
-            r[(64 * (Pieces::QUEEN - 1)) + (x as Field) + (y as Field * 8)] = queen;
-            r[(64 * (Pieces::KING - 1)) + (x as Field) + (y as Field * 8)] = king;
-            r[(64 * (Pieces::ROOK - 1)) + (x as Field) + (y as Field * 8)] = rook;
-            r[(64 * (Pieces::BISHOP - 1)) + (x as Field) + (y as Field * 8)] = bishop;
-            r[(64 * (Pieces::KNIGHT - 1)) + (x as Field) + (y as Field * 8)] = knight;
+            let to_u32 = |x: Field| {
+                    x.assert_max_bit_size::<32>();
+                    x as u32
+            };
+
+            r[to_u32((64 * (Pieces::WHITE_PAWN - 1)) + (x as Field) + (y as Field * 8))] = white_pawn;
+            r[to_u32((64 * (Pieces::BLACK_PAWN - 1)) + (x as Field) + (y as Field * 8))] = black_pawn;
+            r[to_u32((64 * (Pieces::QUEEN - 1)) + (x as Field) + (y as Field * 8))] = queen;
+            r[to_u32((64 * (Pieces::KING - 1)) + (x as Field) + (y as Field * 8))] = king;
+            r[to_u32((64 * (Pieces::ROOK - 1)) + (x as Field) + (y as Field * 8))] = rook;
+            r[to_u32((64 * (Pieces::BISHOP - 1)) + (x as Field) + (y as Field * 8))] = bishop;
+            r[to_u32((64 * (Pieces::KNIGHT - 1)) + (x as Field) + (y as Field * 8))] = knight;
         }
     }
     r

@@ -14,7 +14,9 @@ pub(crate) fn validate_move_and_update_board_state(
 
     assert((player_id == BLACK_PLAYER_ID) | (player_id == WHITE_PLAYER_ID));
     // can the starting piece see the square we want to move to?
-    let end_location = ending_piece.y * 8 + ending_piece.x;
+    let end_location_f = ending_piece.y * 8 + ending_piece.x;
+    end_location_f.assert_max_bit_size::<32>();
+    let end_location = end_location_f as u32;
     let can_see_square = vision[end_location] == 1;
     let square_can_be_moved_into = (board_state[end_location].id == Pieces::EMPTY_SQUARE)
         | (board_state[end_location].player_id != player_id);
@@ -46,23 +48,33 @@ pub(crate) fn validate_move_and_update_board_state(
         can_see_square & square_can_be_moved_into & (starting_piece.id != Pieces::WHITE_PAWN);
 
     let mut pawn_valid = false;
+
+    let piece_location = starting_piece.y * 8 + starting_piece.x;
+    let left_piece = starting_piece.y * 8 + starting_piece.x - 1;
+    let right_piece = starting_piece.y * 8 + starting_piece.x + 1;
+    left_piece.assert_max_bit_size::<32>();
+    right_piece.assert_max_bit_size::<32>();
+    piece_location.assert_max_bit_size::<32>();
     // black
     {
         let en_passant_y: bool = ending_piece.y == starting_piece.y - 1; // ??
         let en_passant_x =
             (ending_piece.x - starting_piece.x) * (ending_piece.x - starting_piece.x) == 1;
-        let en_passant_piece_x1 = starting_piece.y * 8 + starting_piece.x - 1;
         let en_passant_piece_x1_valid = starting_piece.x != 0;
         let en_passant_piece_x2_valid = starting_piece.x != 7;
 
-        let en_passant_piece_x2 = starting_piece.y * 8 + starting_piece.x + 1;
+
+        let b_idx = left_piece * en_passant_piece_x1_valid as Field;
+        let b_idx2 = right_piece * en_passant_piece_x2_valid as Field;
+        b_idx.assert_max_bit_size::<32>();
+        b_idx2.assert_max_bit_size::<32>();
         let en_passant_piece_1 = (
-            board_state[en_passant_piece_x1 * en_passant_piece_x1_valid as Field].id
+            board_state[b_idx as u32].id
                 == Pieces::WHITE_PAWN
         )
             & (en_passant_piece_x1_valid);
         let en_passant_piece_2 = (
-            board_state[en_passant_piece_x2 * en_passant_piece_x2_valid as Field].id
+            board_state[b_idx2 as u32].id
                 == Pieces::WHITE_PAWN
         )
             & (en_passant_piece_x2_valid);
@@ -92,10 +104,10 @@ pub(crate) fn validate_move_and_update_board_state(
 
         if (en_passant_valid & (player_id == BLACK_PLAYER_ID)) {
             if (en_passant_piece_1) {
-                result[starting_piece.y * 8 + starting_piece.x - 1] = Piece::default();
+                result[left_piece as u32] = Piece::default();
             }
             if (en_passant_piece_2) {
-                result[starting_piece.y * 8 + starting_piece.x + 1] = Piece::default();
+                result[right_piece as u32] = Piece::default();
             }
         }
     }
@@ -105,18 +117,19 @@ pub(crate) fn validate_move_and_update_board_state(
         let en_passant_y: bool = ending_piece.y == starting_piece.y + 1; // ??
         let en_passant_x =
             (ending_piece.x - starting_piece.x) * (ending_piece.x - starting_piece.x) == 1;
-        let en_passant_piece_x1 = starting_piece.y * 8 + starting_piece.x - 1;
         let en_passant_piece_x1_valid = starting_piece.x != 0;
         let en_passant_piece_x2_valid = starting_piece.x != 7;
-
-        let en_passant_piece_x2 = starting_piece.y * 8 + starting_piece.x + 1;
+        let b_idx = left_piece * en_passant_piece_x1_valid as Field;
+        b_idx.assert_max_bit_size::<32>();
+        let b_idx2 = right_piece * en_passant_piece_x2_valid as Field;
+        b_idx2.assert_max_bit_size::<32>();
         let en_passant_piece_1 = (
-            board_state[en_passant_piece_x1 * en_passant_piece_x1_valid as Field].id
+            board_state[b_idx as u32].id
                 == Pieces::BLACK_PAWN
         )
             & (en_passant_piece_x1_valid);
         let en_passant_piece_2 = (
-            board_state[en_passant_piece_x2 * en_passant_piece_x2_valid as Field].id
+            board_state[b_idx2 as u32].id
                 == Pieces::BLACK_PAWN
         )
             & (en_passant_piece_x2_valid);
@@ -145,15 +158,15 @@ pub(crate) fn validate_move_and_update_board_state(
 
         if (en_passant_valid & (player_id == WHITE_PLAYER_ID)) {
             if (en_passant_piece_1) {
-                result[starting_piece.y * 8 + starting_piece.x - 1] = Piece::default();
+                result[left_piece as u32] = Piece::default();
             }
             if (en_passant_piece_2) {
-                result[starting_piece.y * 8 + starting_piece.x + 1] = Piece::default();
+                result[right_piece as u32] = Piece::default();
             }
         }
     }
     let castle_is_king = starting_piece.id == Pieces::KING;
-    let castle_king_not_moved = board_state[starting_piece.y * 8 + starting_piece.x].has_moved == 0;
+    let castle_king_not_moved = board_state[piece_location as u32].has_moved == 0;
 
     let castle_left = ending_piece.x == starting_piece.x - 2;
     let castle_right = ending_piece.y == starting_piece.x + 2;
@@ -185,12 +198,20 @@ pub(crate) fn validate_move_and_update_board_state(
     if (player_id == BLACK_PLAYER_ID) {
         y_offset = 56;
     }
+
+    let b_idx: Field = first_empty_square_x + y_offset;
+    let b_idx2 = second_empty_square_x + y_offset;
+    let b_idx3 = 1 + y_offset;
+    b_idx.assert_max_bit_size::<32>();
+    b_idx2.assert_max_bit_size::<32>();
+    b_idx3.assert_max_bit_size::<32>();
+
     let first_empty_square_met: bool =
-        board_state[first_empty_square_x + y_offset].id == Pieces::EMPTY_SQUARE;
+        board_state[b_idx as u32].id == Pieces::EMPTY_SQUARE;
     let second_empty_square_met: bool =
-        board_state[second_empty_square_x + y_offset].id == Pieces::EMPTY_SQUARE;
+        board_state[b_idx2 as u32].id == Pieces::EMPTY_SQUARE;
     let rook_empty_square_met =
-        ((board_state[1 + y_offset].id == Pieces::EMPTY_SQUARE) & castle_left) | castle_right;
+        ((board_state[b_idx3 as u32].id == Pieces::EMPTY_SQUARE) & castle_left) | castle_right;
     let castle_empty_square_check =
         first_empty_square_met & second_empty_square_met & rook_empty_square_met;
 
@@ -203,24 +224,36 @@ pub(crate) fn validate_move_and_update_board_state(
 
     // need to move the rook
     if (castle_valid) {
+        let b_idx: Field = y_offset * 8;
+        let b_idx2 = b_idx + 3;
+        let b_idx3 = b_idx + 5;
+        let b_idx4 = b_idx + 7;
+        b_idx.assert_max_bit_size::<32>();
+        b_idx2.assert_max_bit_size::<32>();
+        b_idx3.assert_max_bit_size::<32>();
+        b_idx4.assert_max_bit_size::<32>();
+
         if (castle_left) {
-            let mut moved_rook = result[y_offset * 8];
+            let mut moved_rook = result[b_idx as u32];
             moved_rook.has_moved = 1;
-            result[y_offset * 8] = Piece::default();
-            result[3 + y_offset * 8] = moved_rook;
+            result[b_idx as u32] = Piece::default();
+            result[b_idx2 as u32] = moved_rook;
         }
         if (castle_right) {
-            let mut moved_rook = result[y_offset * 8 + 7];
+            let mut moved_rook = result[b_idx4 as u32];
             moved_rook.has_moved = 1;
-            result[y_offset * 8 + 7] = Piece::default();
-            result[5 + y_offset * 8] = moved_rook;
+            result[b_idx4 as u32] = Piece::default();
+            result[b_idx3 as u32] = moved_rook;
         }
     }
 
-    let mut moved_piece = result[starting_piece.y * 8 + starting_piece.x];
+    let mut moved_piece = result[piece_location as u32];
     moved_piece.has_moved = 1;
-    result[starting_piece.y * 8 + starting_piece.x] = Piece::default();
-    result[ending_piece.y * 8 + ending_piece.x] = moved_piece;
+    result[piece_location as u32] = Piece::default();
+
+    let b_idx: Field = ending_piece.y * 8 + ending_piece.x;
+    b_idx.assert_max_bit_size::<32>();
+    result[b_idx as u32] = moved_piece;
     assert_eq(valid_move, true);
 
     result
