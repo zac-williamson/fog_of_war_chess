@@ -16,11 +16,12 @@ mod api;
 
 use update_vision::update_vision;
 
-
 use poseidon::poseidon2::Poseidon2::hash as poseidon2;
-
+use protocol_types::traits::{Deserialize, Serialize};
 
 pub type RoundMpcState = RoundState<64, 2>;
+
+#[derive(Serialize, Deserialize)]
 pub struct GameState {
     pub game_ended: bool,
     pub move_count: Field,
@@ -35,7 +36,7 @@ impl std::default::Default for GameState {
 impl GameState {
     pub fn hash(self) -> Field {
         let buffer: [Field; 3] = [self.game_ended as Field, self.move_count, self.mpc_state.hash()];
-        
+
         poseidon2(buffer, 3)
     }
     pub fn commit_to_user_secrets(
@@ -52,7 +53,7 @@ impl GameState {
         updated
     }
 }
-
+#[derive(Serialize, Deserialize)]
 pub struct MoveData {
     pub x1: Field,
     pub y1: Field,
@@ -64,7 +65,7 @@ impl MoveData {
         MoveData { x1, y1, x2, y2 }
     }
 }
-
+#[derive(Serialize, Deserialize)]
 pub struct UserState {
     pub encrypt_secret: Field,
     pub mask_secret: Field,
@@ -392,7 +393,10 @@ pub fn move_for_contract<let PlayerId: u32>(
 
     let existing_end_piece = user_state.game_state[(move_data.x2 + move_data.y2 * 8) as u32];
     let mut game_ended = false;
-    if ((existing_end_piece.id == Pieces::KING) & (existing_end_piece.player_id != PlayerId as Field)) {
+    if (
+        (existing_end_piece.id == Pieces::KING)
+            & (existing_end_piece.player_id != PlayerId as Field)
+    ) {
         game_ended = true;
     }
 
@@ -450,7 +454,6 @@ pub fn move_for_contract<let PlayerId: u32>(
     // White has received Black's mask commitments (what black wants to see from white)
 }
 
-
 pub fn move(
     input_state: GameState,
     user_state: UserState,
@@ -490,7 +493,10 @@ pub fn move(
 
     let existing_end_piece = user_state.game_state[(move_data.x2 + move_data.y2 * 8) as u32];
     let mut game_ended = false;
-    if ((existing_end_piece.id == Pieces::KING) & (existing_end_piece.player_id != player_id as Field)) {
+    if (
+        (existing_end_piece.id == Pieces::KING)
+            & (existing_end_piece.player_id != player_id as Field)
+    ) {
         game_ended = true;
     }
 
