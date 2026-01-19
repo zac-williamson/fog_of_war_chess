@@ -2,7 +2,7 @@ use crate::{BLACK_PLAYER_ID, WHITE_PLAYER_ID};
 use crate::piece::{Piece, PieceData, Pieces};
 use crate::update_vision::update_vision_for_piece;
 
-pub(crate) fn validate_move_and_update_board_state(
+pub fn validate_move_and_update_board_state(
     board_state: [Piece; 64],
     starting_piece: PieceData,
     ending_piece: PieceData,

@@ -10,8 +10,8 @@ use crate::piece::{Piece, PieceData, Pieces};
 
 mod update_vision;
 mod vision_table;
-mod piece;
-mod validate_move;
+pub mod piece;
+pub mod validate_move;
 mod api;
 
 use update_vision::update_vision;
@@ -20,7 +20,7 @@ use update_vision::update_vision;
 use poseidon::poseidon2::Poseidon2::hash as poseidon2;
 
 
-type RoundMpcState = RoundState<64, 2>;
+pub type RoundMpcState = RoundState<64, 2>;
 pub struct GameState {
     pub game_ended: bool,
     pub move_count: Field,
@@ -85,7 +85,29 @@ impl std::default::Default for UserState {
 
 impl UserState {
 
-    pub(crate) fn initialize(self, player_id: Field) -> Self {
+    pub fn encode(self) -> [Field; 130] {
+        let mut result: [Field; 130] = [0; 130];
+        result[0] = self.encrypt_secret;
+        result[1] = self.mask_secret;
+        for i in 0..64 {
+            result[2 + i] = self.visible_squares[i];
+            result[66 + i] = self.game_state[i].encode();
+        }
+        result
+    }
+
+    pub fn decode(input: [Field; 130]) -> Self {
+        let mut result: UserState = UserState::default();
+
+        result.encrypt_secret = input[0];
+        result.mask_secret = input[1];
+        for i in 0..64 {
+            result.visible_squares[i] = input[2 + i];
+            result.game_state[i] = Piece::decode(input[66 + i]);
+        }
+        result
+    }
+    pub fn initialize(self, player_id: Field) -> Self {
         let first_32_square_visibility = 1 - player_id;
         let last_32_square_visibility = player_id;
         assert_eq(WHITE_PLAYER_ID, 0);
@@ -137,6 +159,71 @@ impl UserState {
         let mut game_state: [Piece; 64] = [Piece::default(); 64];
         for i in 0..16 {
             if (player_id == WHITE_PLAYER_ID) {
+                game_state[i] = white_game_state[i];
+            } else {
+                game_state[i + 48] = black_game_state[i];
+            }
+        }
+        UserState {
+            encrypt_secret: self.encrypt_secret,
+            mask_secret: self.mask_secret,
+            visible_squares: visibility,
+            game_state,
+        }
+    }
+
+    pub(crate) fn initialize_alternate<let PlayerId: Field>(self) -> Self {
+        let first_32_square_visibility = 1 - PlayerId;
+        let last_32_square_visibility = PlayerId;
+        assert_eq(WHITE_PLAYER_ID, 0);
+        assert_eq(BLACK_PLAYER_ID, 1);
+        let mut visibility: [Field; 64] = [0; 64];
+        for i in 0..32 {
+            visibility[i] = first_32_square_visibility;
+            visibility[i + 32] = last_32_square_visibility;
+        }
+
+        let white_game_state: [Piece; 16] = [
+            Piece { id: Pieces::ROOK, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::KNIGHT, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BISHOP, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::QUEEN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::KING, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BISHOP, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::KNIGHT, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::ROOK, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::WHITE_PAWN, player_id: WHITE_PLAYER_ID, has_moved: 0 },
+        ];
+
+        let black_game_state: [Piece; 16] = [
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BLACK_PAWN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::ROOK, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::KNIGHT, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BISHOP, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::QUEEN, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::KING, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::BISHOP, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::KNIGHT, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+            Piece { id: Pieces::ROOK, player_id: BLACK_PLAYER_ID, has_moved: 0 },
+        ];
+
+        let mut game_state: [Piece; 64] = [Piece::default(); 64];
+        for i in 0..16 {
+            if (PlayerId == WHITE_PLAYER_ID) {
                 game_state[i] = white_game_state[i];
             } else {
                 game_state[i + 48] = black_game_state[i];
@@ -263,6 +350,106 @@ impl std::default::Default for MoveHashes {
         }
     }
 }
+
+pub fn move_for_contract<let PlayerId: u32>(
+    game_state_hash: Field,
+    input_state: GameState,
+    user_state: UserState,
+    move_data: MoveData,
+) -> (UserOutputState<64, 2>, MoveHashes) {
+    let input_state_hash = input_state.hash();
+    let input_user_state_hash = user_state.hash();
+    assert_eq(input_state_hash, game_state_hash);
+
+    assert((PlayerId as Field == WHITE_PLAYER_ID) | (PlayerId as Field == BLACK_PLAYER_ID));
+    assert_eq(input_state.game_ended, false);
+    // Safety: cheapish check to see if player_id is correct. If move_count = even, white's turn. odd = black's turn
+    let move_count_div2 = unsafe { __div2(input_state.move_count) };
+    assert_eq(move_count_div2 as Field * 2 + PlayerId as Field, input_state.move_count);
+    let mut user_state = user_state;
+    if ((input_state.move_count == 0) | (input_state.move_count == 1)) {
+        user_state = UserState::initialize(user_state, PlayerId as Field);
+    }
+
+    // TODO: we need to validate that the provided user state is the same as a user state value that white previously committed to
+    // we can just output the user state hash and the game state hash and have a higher level fn handle it
+    move_data.x1.assert_max_bit_size::<3>();
+    move_data.x2.assert_max_bit_size::<3>();
+    move_data.y1.assert_max_bit_size::<3>();
+    move_data.y2.assert_max_bit_size::<3>();
+
+    let mut user_state: UserState =
+        consume_opponent_move_and_update_game_state(input_state, user_state, PlayerId as Field);
+
+    // Validate Move
+    // Update Game State
+    let starting_piece = user_state.game_state[(move_data.x1 + move_data.y1 * 8) as u32];
+    // let ending_piece = user_state.game_state[move_data.x2 + move_data.y2 * 8];
+    let starting_piece_data: PieceData =
+        PieceData { id: starting_piece.id, x: move_data.x1, y: move_data.y1, exists: 1 };
+    let ending_piece_data: PieceData =
+        PieceData { id: starting_piece.id, x: move_data.x2, y: move_data.y2, exists: 1 };
+
+    let existing_end_piece = user_state.game_state[(move_data.x2 + move_data.y2 * 8) as u32];
+    let mut game_ended = false;
+    if ((existing_end_piece.id == Pieces::KING) & (existing_end_piece.player_id != PlayerId as Field)) {
+        game_ended = true;
+    }
+
+    user_state.game_state = validate_move_and_update_board_state(
+        user_state.game_state,
+        starting_piece_data,
+        ending_piece_data,
+        PlayerId as Field,
+    );
+    // If black has moved and captured a white piece, whice's mask vector needs to be updated
+    let visible_squares = update_vision(user_state.game_state, PlayerId as Field);
+
+    // validate_move_and_update_board_state(user_state.encoded_pieces)
+    // when used inside a Noir program, previous_round_hash should be sourced from a pub variable
+    // assert_eq(previous_round_hash, round_state.hash());
+
+    // TODO this logic should be wrapped in a helper function
+    assert_eq(
+        poseidon2([user_state.encrypt_secret, -1], 2),
+        input_state.mpc_state.user_encrypt_secret_hashes[PlayerId],
+    );
+    assert_eq(
+        poseidon2([user_state.mask_secret, -1], 2),
+        input_state.mpc_state.user_mask_secret_hashes[PlayerId],
+    );
+    let white_output_state: UserOutputState<64, 2> = create_round_commitments(
+        user_state.encode_game_state(),
+        visible_squares,
+        user_state.encrypt_secret,
+        user_state.mask_secret,
+        input_state.mpc_state,
+        PlayerId as u32,
+    );
+
+    let output_mpc_state = input_state.mpc_state.update2(white_output_state, PlayerId as u32);
+
+    let mut output_state = GameState {
+        game_ended,
+        move_count: input_state.move_count + 1,
+        mpc_state: output_mpc_state,
+    };
+
+    (
+        white_output_state,
+        MoveHashes {
+            input_game_state: input_state_hash,
+            input_user_state: input_user_state_hash,
+            output_game_state: output_state.hash(),
+            output_user_state: user_state.hash(),
+        },
+    )
+    // need to validate move.
+    // if Castle, or En Passant, 2 states need to be updated
+
+    // White has received Black's mask commitments (what black wants to see from white)
+}
+
 
 pub fn move(
     input_state: GameState,
