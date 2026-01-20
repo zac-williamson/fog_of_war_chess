@@ -1,3 +1,5 @@
+use protocol_types::traits::{Deserialize, Serialize};
+
 pub mod Pieces {
     pub global EMPTY_SQUARE: Field = 0;
     pub global WHITE_PAWN: Field = 1;
@@ -9,6 +11,7 @@ pub mod Pieces {
     pub global KING: Field = 7;
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Piece {
     pub id: Field,
     pub player_id: Field,
